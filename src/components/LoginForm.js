@@ -64,6 +64,7 @@ function LoginForm({ existingUser }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="input-text"
+              autoComplete="username"
             />
           </label>
           <label className="input-label login-label">
@@ -74,6 +75,7 @@ function LoginForm({ existingUser }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="input-text"
+              autoComplete="current-password"
             />
           </label>
           <div className="button-box">
