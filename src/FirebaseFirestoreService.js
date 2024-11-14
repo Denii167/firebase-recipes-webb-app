@@ -9,6 +9,9 @@ import {
   updateDoc,
   deleteDoc,
   orderBy,
+  getDoc,
+  limit,
+  startAfter,
 } from "firebase/firestore"; // Import Firebase functions
 
 const createDocument = async (collectionName, document) => {
@@ -23,35 +26,56 @@ const createDocument = async (collectionName, document) => {
   }
 };
 
+const readDocument = async (collectionName, id) => {
+  const docRef = doc(db, collectionName, id);
+  try {
+    const documentSnapshot = await getDoc(docRef);
+    if (documentSnapshot.exists()) {
+      return { id: documentSnapshot.id, ...documentSnapshot.data() };
+    } else {
+      console.error(`No document found with ID: ${id}`);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error reading document:", error);
+    throw error;
+  }
+};
+
 const readDocuments = async (
   collectionName,
   queries = [],
   orderByField,
-  orderByDirection
+  orderByDirection,
+  perPage,
+  cursorId
 ) => {
-  // Function to read documents from a specified Firestore collection with optional query constraints
-
   try {
-    let collectionRef = collection(db, collectionName); // Define the base collection reference
+    let collectionRef = collection(db, collectionName);
 
-    const queryConstraints = queries.map(
-      (
-        queryItem // Apply 'where' constraints if provided
-      ) => where(queryItem.field, queryItem.condition, queryItem.value)
+    const queryConstraints = queries.map((queryItem) =>
+      where(queryItem.field, queryItem.condition, queryItem.value)
     );
 
     if (orderByField && orderByDirection) {
-      // Add 'orderBy' to query constraints if sorting is specified
       queryConstraints.push(orderBy(orderByField, orderByDirection));
     }
 
-    const finalQuery = query(collectionRef, ...queryConstraints); // Create a Firestore query with both where and orderBy constraints
+    if (perPage) {
+      queryConstraints.push(limit(perPage));
+    }
 
-    const querySnapshot = await getDocs(finalQuery); // Fetch and map documents
+    if (cursorId) {
+      const cursorDoc = await getDoc(doc(db, collectionName, cursorId));
+      if (cursorDoc.exists()) {
+        queryConstraints.push(startAfter(cursorDoc));
+      }
+    }
+
+    const finalQuery = query(collectionRef, ...queryConstraints);
+    const querySnapshot = await getDocs(finalQuery);
 
     return querySnapshot.docs.map((doc) => ({
-      // Map over each document in the snapshot to create an array of document data including ID
-
       id: doc.id,
       ...doc.data(),
     }));
@@ -96,6 +120,7 @@ const deleteDocument = async (collectionName, id) => {
 const FirebaseFirestoreService = {
   // Export the Firestore service functions for use in other parts of the app
   createDocument,
+  readDocument,
   readDocuments,
   updateDocument,
   deleteDocument,

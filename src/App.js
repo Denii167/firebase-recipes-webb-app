@@ -13,64 +13,60 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [orderBy, setOrderBy] = useState("publishDateDesc");
+  const [recipesPerPage, setRecipesPerPage] = useState(3);
 
-  const fetchRecipes = useCallback(async () => {
-    const queries = [];
-
-    if (categoryFilter) {
-      queries.push({
-        field: "category",
-        condition: "==",
-        value: categoryFilter,
-      });
-    }
-
-    if (!user) {
-      queries.push({
-        field: "isPublished",
-        condition: "==",
-        value: true,
-      });
-    }
-
-    const orderByField = "publishDate";
-    let orderByDirection;
-
-    if (orderBy) {
-      switch (orderBy) {
-        case "publishDateAsc":
-          orderByDirection = "asc";
-          break;
-        case "publishDateDesc":
-          orderByDirection = "desc";
-          break;
-        default:
-          break;
+  const fetchRecipes = useCallback(
+    async (cursorId = "") => {
+      const queries = [];
+      if (categoryFilter) {
+        queries.push({
+          field: "category",
+          condition: "==",
+          value: categoryFilter,
+        });
       }
-    }
 
-    setIsLoading(true); // Set loading to true before fetching
+      if (!user) {
+        queries.push({
+          field: "isPublished",
+          condition: "==",
+          value: true,
+        });
+      }
 
-    try {
-      const response = await FirebaseFirestoreService.readDocuments(
-        "recipes", //nome da colecao diretamente
-        queries, // Array de queries
-        orderByField,
-        orderByDirection
-      );
+      const orderByField = "publishDate";
+      const orderByDirection = orderBy === "publishDateAsc" ? "asc" : "desc";
 
-      const newRecipes = response.map((recipe) => {
-        recipe.publishDate = new Date(recipe.publishDate.seconds * 1000); // Convert timestamps to Date objects
-        return recipe;
-      });
+      setIsLoading(true);
 
-      setRecipes(newRecipes);
-    } catch (error) {
-      console.error("Error fetching recipes:", error.message);
-    } finally {
-      setIsLoading(false); // Ensure loading is set to false after fetch
-    }
-  }, [user, categoryFilter, orderBy]);
+      try {
+        const response = await FirebaseFirestoreService.readDocuments(
+          "recipes",
+          queries,
+          orderByField,
+          orderByDirection,
+          recipesPerPage,
+          cursorId
+        );
+
+        const newRecipes = response.map((recipe) => {
+          recipe.publishDate = new Date(recipe.publishDate.seconds * 1000);
+          return recipe;
+        });
+
+        if (cursorId) {
+          setRecipes((prevRecipes) => [...prevRecipes, ...newRecipes]);
+        } else {
+          setRecipes(newRecipes);
+        }
+      } catch (error) {
+        console.error("Error fetching recipes:", error.message);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [user, categoryFilter, orderBy, recipesPerPage]
+  );
 
   useEffect(() => {
     fetchRecipes(); // Call fetchRecipes on component mount or when 'user' changes
@@ -81,9 +77,22 @@ function App() {
     return unsubscribe; // Garante a limpeza ao desmontar
   }, []);
 
-  async function handleFetchRecipes() {
+  function handleRecipesPerPageChange(event) {
+    const recipesPerPage = event.target.value;
+
+    setRecipes([]);
+    setRecipesPerPage(recipesPerPage);
+  }
+
+  function handleLoadMoreRecipesClick() {
+    const lastRecipe = recipes[recipes.length - 1];
+    const cursorId = lastRecipe ? lastRecipe.id : "";
+    fetchRecipes(cursorId);
+  }
+
+  async function handleFetchRecipes(cursorId = "") {
     try {
-      await fetchRecipes();
+      await fetchRecipes(cursorId);
     } catch (error) {
       console.error("Error in handleFetchRecipes:", error.message);
     }
@@ -261,6 +270,29 @@ function App() {
             )}
           </div>
         </div>
+        {isLoading || (recipes && recipes.length > 0) ? (
+          <>
+            <label className="input-label">
+              Recipes Per Page:
+              <select
+                value={recipesPerPage}
+                onChange={handleRecipesPerPageChange}
+                className="select">
+                <option value="3">3</option>
+                <option value="6">6</option>
+                <option value="9">9</option>
+              </select>
+            </label>
+            <div className="pagination">
+              <button
+                type="button"
+                onClick={handleLoadMoreRecipesClick}
+                className="primary-button">
+                LOAD MORE RECIPES
+              </button>
+            </div>
+          </>
+        ) : null}
         {user && (
           <AddEditRecipeForm
             existingRecipe={currentRecipe}
